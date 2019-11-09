@@ -2,7 +2,7 @@ import numpy as np
 from sklearn import preprocessing
 
 from keras.models import Sequential
-from keras.layers import Dense, Activation
+from keras.layers import Dense, Activation, Masking
 from keras.layers import LSTM
 from keras.optimizers import RMSprop, SGD
 from keras.utils import np_utils
@@ -13,7 +13,12 @@ from sklearn.preprocessing import MinMaxScaler
 
 def min_max_scaler(x):
     for i in range(x.shape[1]):
+        missing_values = x[:, i, :] == -1
         x[:, i, :] = MinMaxScaler().fit_transform(x[:, i, :])
+        for j in range(missing_values.shape[0]):
+            for k in range(missing_values.shape[1]):
+                if missing_values[j, k]:
+                    x[j, i, k] = -1
     return x
 
 
@@ -36,6 +41,7 @@ def load_and_partition(data_path, labels_path, nclasses):
 
 def baseline_model(neurons, nclasses):
     model = Sequential()
+    model.add(Masking(mask_value=-1, input_shape=(321, 324)))
     model.add(LSTM(neurons, input_shape=(321, 324), implementation=2, recurrent_dropout=0))
     model.add(Dense(nclasses))
     model.add(Activation('softmax'))
@@ -46,7 +52,7 @@ def baseline_model(neurons, nclasses):
 
 
 def classify(model, x_train, x_test, y_train, y_test, true_classes):
-    epochs = 2000
+    epochs = 500
     batch_size = 1000
     model.fit(x_train, y_train,
               batch_size=batch_size,
