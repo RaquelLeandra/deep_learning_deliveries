@@ -8,6 +8,13 @@ from keras.optimizers import RMSprop, SGD
 from keras.utils import np_utils
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+
+
+def min_max_scaler(x):
+    for i in range(x.shape[1]):
+        x[:, i, :] = MinMaxScaler().fit_transform(x[:, i, :])
+    return x
 
 
 def load_and_partition(data_path, labels_path, nclasses):
@@ -15,12 +22,15 @@ def load_and_partition(data_path, labels_path, nclasses):
     dataset = np.load(data_path)
     encoder = preprocessing.LabelEncoder()
     x_train, x_test, y_train, y_test = train_test_split(dataset, labels, test_size=0.2, random_state=42)
+
     encoder.fit(y_train)
     y_train_c = encoder.transform(y_train)
     y_test_c = encoder.transform(y_test)
     y_train_c = np_utils.to_categorical(y_train_c, nclasses)
     y_test_c = np_utils.to_categorical(y_test_c, nclasses)
 
+    x_train = min_max_scaler(x_train)
+    x_test = min_max_scaler(x_test)
     return x_train, x_test, y_train_c, y_test_c, encoder.classes_
 
 
@@ -36,7 +46,7 @@ def baseline_model(neurons, nclasses):
 
 
 def classify(model, x_train, x_test, y_train, y_test, true_classes):
-    epochs = 1000
+    epochs = 2000
     batch_size = 1000
     model.fit(x_train, y_train,
               batch_size=batch_size,
