@@ -4,20 +4,16 @@ from time import time
 
 import numpy as np
 import pandas as pd
-from sklearn import preprocessing
-
-from keras.models import Sequential
+import seaborn as sns
 from keras.layers import Dense, Activation, Masking
 from keras.layers import SimpleRNN, LSTM, GRU
-from keras.optimizers import RMSprop, SGD
+from keras.models import Sequential
+from keras.optimizers import SGD
 from keras.utils import np_utils
+from matplotlib import pyplot as plt
+from sklearn import preprocessing
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
-from matplotlib import pyplot as plt
-from sklearn.utils.multiclass import unique_labels
-
-import seaborn as sns
 
 sns.set()
 
@@ -54,16 +50,16 @@ def write_the_model(model, experiment_name):
 
 def min_max_scaler(x):
     for i in range(x.shape[1]):
-        missing_values = x[:, i, :] == -1
-        x[:, i, :] = MinMaxScaler().fit_transform(x[:, i, :])
+        missing_values = x[:, :, i] == -1
+        x[:, :, i] = ((x[:, :, i]) - np.min(x[:, :, i])) / (np.max(x[:, :, i]) - np.min(x[:, :, i]))
         for j in range(missing_values.shape[0]):
             for k in range(missing_values.shape[1]):
                 if missing_values[j, k]:
-                    x[j, i, k] = -1
+                    x[j, k, i] = -1
     return x
 
 
-def load_and_partition(data_path, labels_path, nclasses):
+def load_and_partition(data_path, labels_path, nclasses, scaler=True):
     labels = np.load(labels_path)
     dataset = np.load(data_path)
     encoder = preprocessing.LabelEncoder()
@@ -74,16 +70,16 @@ def load_and_partition(data_path, labels_path, nclasses):
     y_test_c = encoder.transform(y_test)
     y_train_c = np_utils.to_categorical(y_train_c, nclasses)
     y_test_c = np_utils.to_categorical(y_test_c, nclasses)
-
-    x_train = min_max_scaler(x_train)
-    x_test = min_max_scaler(x_test)
+    if scaler:
+        x_train = min_max_scaler(x_train)
+        x_test = min_max_scaler(x_test)
     return x_train, x_test, y_train_c, y_test_c, encoder.classes_
 
 
-def baseline_model(neurons, nclasses):
+def baseline_model(neurons, nclasses, input_shape=(321, 324), dropout=0):
     model = Sequential()
-    model.add(Masking(mask_value=-1, input_shape=(321, 324)))
-    model.add(SimpleRNN(neurons, input_shape=(321, 324), implementation=2, recurrent_dropout=0))
+    model.add(Masking(mask_value=-1, input_shape=input_shape))
+    model.add(SimpleRNN(neurons, input_shape=input_shape, implementation=2, dropout=dropout))
     model.add(Dense(nclasses))
     model.add(Activation('softmax'))
 
@@ -92,10 +88,10 @@ def baseline_model(neurons, nclasses):
     return model
 
 
-def small_LSTM(neurons, nclasses):
+def small_LSTM(neurons, nclasses, dropout=0, input_shape=(321, 324)):
     model = Sequential()
-    model.add(Masking(mask_value=-1, input_shape=(321, 324)))
-    model.add(LSTM(neurons, input_shape=(321, 324), implementation=2, recurrent_dropout=0))
+    model.add(Masking(mask_value=-1, input_shape=input_shape))
+    model.add(LSTM(neurons, input_shape=input_shape, implementation=2, dropout=dropout))
     model.add(Dense(nclasses))
     model.add(Activation('softmax'))
 
@@ -104,10 +100,10 @@ def small_LSTM(neurons, nclasses):
     return model
 
 
-def small_GRU(neurons, nclasses):
+def small_GRU(neurons, nclasses, dropout=0, input_shape=(321, 324)):
     model = Sequential()
-    model.add(Masking(mask_value=-1, input_shape=(321, 324)))
-    model.add(GRU(neurons, input_shape=(321, 324), implementation=2, recurrent_dropout=0))
+    model.add(Masking(mask_value=-1, input_shape=input_shape))
+    model.add(GRU(neurons, input_shape=input_shape, implementation=2, dropout=dropout))
     model.add(Dense(nclasses))
     model.add(Activation('softmax'))
 
@@ -157,7 +153,7 @@ def plot_confusion_matrix(y_true, y_pred, classes,
     plt.close()
 
 
-def classify(model, x_train, x_test, y_train, y_test, true_classes, experiment_name='experiment', epochs=500,
+def classify(model, x_train, x_test, y_train, y_test, true_classes, experiment_name='experiment', epochs=200,
              batch_size=100):
     write_the_model(model, experiment_name)
 
@@ -191,7 +187,7 @@ def classify(model, x_train, x_test, y_train, y_test, true_classes, experiment_n
         fh.write(classification_report(y_true, y_pred, target_names=true_classes))
         fh.write('\nConfusion matrix:\n')
         fh.write(str(confusion_matrix(y_true, y_pred)))
-    plot_confusion_matrix(y_true, y_pred, true_classes,experiment_name=experiment_name)
+    plot_confusion_matrix(y_true, y_pred, true_classes, experiment_name=experiment_name)
     return score[0], score[1]
 
 
@@ -201,31 +197,40 @@ def run_test_experiment(x_train, x_test, y_train, y_test, classes):
     classify(model, x_train, x_test, y_train, y_test, classes, experiment_name='try_that_works', epochs=5)
 
 
-def run_all_experiments(x_train, x_test, y_train, y_test, classes):
+def run_all_experiments(x_train, x_test, y_train, y_test, classes, add_to_name=''):
     models = {'baseline': baseline_model,
               'small_lstm': small_LSTM,
               'small_gru': small_GRU
               }
     number_of_neurons = [32, 64, 128, 256, 512]
     nclasses = len(classes)
+    dropouts = [0, 0.2, 0.3, 0.4, 0.5]
     results_accuracy = pd.DataFrame(columns=models.keys(), index=number_of_neurons)
     results_loss = pd.DataFrame(columns=models.keys(), index=number_of_neurons)
-    for model_name in models:
-        for n_neurons in number_of_neurons:
-            model = models[model_name](n_neurons, nclasses)
-            experiment_name = '{}_{}'.format(model_name, n_neurons)
-            loss, accuracy = classify(model, x_train, x_test, y_train, y_test, classes, experiment_name, epochs=600)
-            results_accuracy.loc[n_neurons, model_name] = accuracy
-            results_loss.loc[n_neurons, model_name] = loss
+    for dropout in dropouts:
+        for model_name in models:
+            for n_neurons in number_of_neurons:
+                model = models[model_name](n_neurons, nclasses, input_shape=(321, 100), dropout=dropout)
+                experiment_name = add_to_name + '_{}_{}_{}'.format(model_name, n_neurons,
+                                                                   str(dropout).replace('.', '_'))
+                print(experiment_name)
+                loss, accuracy = classify(model, x_train, x_test, y_train, y_test, classes, experiment_name, epochs=300)
+                results_accuracy.loc[n_neurons, model_name] = accuracy
+                results_loss.loc[n_neurons, model_name] = loss
 
-    results_accuracy.to_csv(experiment_resource('results_accuracy_all.csv'))
-    results_loss.to_csv(experiment_resource('results_loss_all.csv'))
+        results_accuracy.to_csv(experiment_resource(add_to_name + '_results_accuracy_all_{}.csv'.format(dropout)))
+        results_loss.to_csv(experiment_resource(add_to_name + '_results_loss_all_{}.csv'.format(dropout)))
 
 
 if __name__ == '__main__':
     labels_path = '../data/labels.npy'
     dataset_path = '../data/padded_sequences.npy'
     nclasses = 5
-    x_train, x_test, y_train, y_test, classes = load_and_partition(dataset_path, labels_path, nclasses)
+    # x_train, x_test, y_train, y_test, classes = load_and_partition(dataset_path, labels_path, nclasses,
+    #                                                                scaler=False)
+
+    pca_dataset_path = '../data/pca_sequences.npy'
+    x_train, x_test, y_train, y_test, classes = load_and_partition(pca_dataset_path, labels_path, nclasses,
+                                                                   scaler=False)
     classes = [cl.replace('The Hunger Games: Catching Fire', 'Hunger Games') for cl in classes]
-    run_all_experiments(x_train, x_test, y_train, y_test, classes)
+    run_all_experiments(x_train, x_test, y_train, y_test, classes, 'pca')
