@@ -1,0 +1,42 @@
+Model: "sequential_19"
+_________________________________________________________________
+Layer (type)                 Output Shape              Param #   
+=================================================================
+masking_19 (Masking)         (None, 321, 100)          0         
+_________________________________________________________________
+simple_rnn_9 (SimpleRNN)     (None, 256)               91392     
+_________________________________________________________________
+dense_19 (Dense)             (None, 5)                 1285      
+_________________________________________________________________
+activation_19 (Activation)   (None, 5)                 0         
+=================================================================
+Total params: 92,677
+Trainable params: 92,677
+Non-trainable params: 0
+_________________________________________________________________
+
+History params: {'batch_size': 100, 'epochs': 300, 'steps': None, 'samples': 47, 'verbose': 1, 'do_validation': True, 'metrics': ['loss', 'accuracy', 'val_loss', 'val_accuracy']}
+
+Training time: 0:00:44.442608
+
+test loss: 1.9570525884628296
+test accuracy: 0.6000000238418579
+Analysis of results:
+              precision    recall  f1-score   support
+
+       Buddy       0.75      1.00      0.86         3
+ Dinosaurier       0.80      0.80      0.80         5
+    Hobbit 2       0.00      0.00      0.00         3
+Hunger Games       0.00      0.00      0.00         2
+Walter Mitty       0.33      1.00      0.50         2
+
+    accuracy                           0.60        15
+   macro avg       0.38      0.56      0.43        15
+weighted avg       0.46      0.60      0.50        15
+
+Confusion matrix:
+[[3 0 0 0 0]
+ [1 4 0 0 0]
+ [0 1 0 0 2]
+ [0 0 0 0 2]
+ [0 0 0 0 2]]
